@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
+const API_URL = "https://safer-sandwich-brian-springs.trycloudflare.com";
+
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
 const SOURCES = [
@@ -28,62 +30,7 @@ const TONE_PROMPT = `You write in a casual, fun, hype Maltese English voice. Use
 For breaking news: urgent and punchy. For lifestyle/events: fun and engaging. Always write from scratch — never copy source text.
 Always end with a question or CTA to boost engagement. Use relevant hashtags.`;
 
-const MOCK_QUEUE = [
-  {
-    id: 1, category: "Breaking", isBreaking: true,
-    source: "Times of Malta", sourceIcon: "🗞️",
-    rawTitle: "Fatal accident on Mosta bypass causes major delays",
-    rawSummary: "A two-vehicle collision on the Mosta bypass this morning has resulted in one fatality and serious injuries to two others. Emergency services are on the scene.",
-    generatedPost: "🚨 BREAKING | Tragic news from the Mosta bypass this morning — a serious crash has claimed one life and left two others injured 💔 Emergency services are at the scene and traffic is at a standstill.\n\nPlease AVOID the area and take alternative routes. Stay safe out there, Malta 🙏\n\n#MaltaNews #MostaBypass #Breaking #RoadSafety #Malta",
-    image: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=600&q=80",
-    timestamp: "08:43", timeAgo: "2 min ago", status: "pending", alertSent: true,
-  },
-  {
-    id: 2, category: "Weather", isBreaking: false,
-    source: "MeteoCiel / MET", sourceIcon: "🌤️",
-    rawTitle: "Hot and humid through the week — 35°C by Thursday",
-    rawSummary: "Malta Meteorological Office forecasts a persistent high pressure system bringing temperatures up to 35°C by mid-week with humidity levels above 80%.",
-    generatedPost: "🌡️ WEATHER CHECK | Yeah it's about to get SPICY, Malta! 🔥 Temps climbing to 35°C by Thursday with humidity that'll make you feel like you're swimming through air 😅\n\nHydrate, wear sunscreen, and maybe don't plan that outdoor workout for midday yeah? 💦\n\nHigh: 35°C 🌞 | Low: 26°C 🌙 | Humidity: 80%+ 💧 | UV: Very High ☀️\n\n#MaltaWeather #HeatWave #Malta #Summer #StayCool",
-    image: "https://images.unsplash.com/photo-1561553873-e8491a564fd0?w=600&q=80",
-    timestamp: "09:00", timeAgo: "15 min ago", status: "pending", alertSent: false,
-  },
-  {
-    id: 3, category: "Traffic", isBreaking: false,
-    source: "Google Maps / Waze", sourceIcon: "🚗",
-    rawTitle: "Heavy congestion on Regional Road A1 — 40 min delays",
-    rawSummary: "Waze and Google Maps reporting major slowdowns on the Regional Road between Birkirkara and Attard junction. Estimated delays of 35–40 minutes.",
-    generatedPost: "🚗 TRAFFIC ALERT | The Regional Road is basically a car park right now 😩 Birkirkara ➡️ Attard junction — you're looking at 40 MINUTES of delays!\n\nQuick detours:\n📍 Via Balzan back roads\n📍 Through Lija village\n📍 St. Andrew's Road\n\nLeave earlier or grab a coffee and wait it out ☕\n\n#MaltaTraffic #RegionalRoad #Birkirkara #MaltaDriving #TrafficUpdate",
-    image: "https://images.unsplash.com/photo-1581262208435-41726149a759?w=600&q=80",
-    timestamp: "08:55", timeAgo: "20 min ago", status: "approved", alertSent: false,
-  },
-  {
-    id: 4, category: "Sports", isBreaking: false,
-    source: "Malta Sports", sourceIcon: "⚽",
-    rawTitle: "Hibernians win BOV Premier League title after 3-1 win over Valletta FC",
-    rawSummary: "Hibernians FC clinched the BOV Premier League title last night with a commanding 3-1 victory over Valletta FC at the National Stadium.",
-    generatedPost: "🏆 CHAMPIONS!! Hibernians are your BOV Premier League winners!! 🔴⚫🔥\n\nWhat a night at the National Stadium — 3-1 over Valletta FC and the title is THEIRS! The Paola faithful are going absolutely mental right now 🎉🎉\n\nHibernians fans — this one's for you! Drop a 🔴 in the comments!\n\n#Hibernians #BOVPremierLeague #MaltaFootball #Champions #PaolaFC #MaltaSports",
-    image: "https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=600&q=80",
-    timestamp: "07:30", timeAgo: "1 hr ago", status: "pending", alertSent: false,
-  },
-  {
-    id: 5, category: "Lifestyle", isBreaking: false,
-    source: "Lovin Malta", sourceIcon: "❤️",
-    rawTitle: "New rooftop bar opens in Valletta with 360° harbour views",
-    rawSummary: "A new rooftop bar called Bastion Sky has opened on Republic Street, Valletta, offering panoramic views of the Grand Harbour and Marsamxett.",
-    generatedPost: "🍹 NEW SPOT ALERT! Valletta just got a whole lot cooler 😍 Bastion Sky is officially OPEN on Republic Street and the views are absolutely INSANE — 360° of Grand Harbour magic!\n\nPerfect for sundowners, date nights, or just showing off to your tourist friends 😂✨\n\nHave you been yet? Tag who you're taking! 👇\n\n#BastionSky #Valletta #MaltaBars #GrandHarbour #MaltaNightlife #NewOpening",
-    image: "https://images.unsplash.com/photo-1566417713940-fe7c737a9ef2?w=600&q=80",
-    timestamp: "06:00", timeAgo: "2 hrs ago", status: "pending", alertSent: false,
-  },
-  {
-    id: 6, category: "News", isBreaking: false,
-    source: "Malta Daily", sourceIcon: "☀️",
-    rawTitle: "Government announces €50M fund for first-time buyers",
-    rawSummary: "Finance Minister unveils a new €50 million scheme to help first-time property buyers in Malta, including interest subsidies and down payment grants.",
-    generatedPost: "🏠 LISTEN UP first-time buyers! The government just dropped €50 MILLION to help YOU get on the property ladder!! 👀💸\n\nWe're talking interest subsidies AND down payment grants — this could be your moment!\n\nFull details dropping soon but if you've been dreaming of your own place in Malta... this one's for you 🔑✨\n\nAre you a first-time buyer? Drop a 🏠 below!\n\n#MaltaProperty #FirstTimeBuyer #MaltaNews #RealEstate #Malta #HomeOwner",
-    image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600&q=80",
-    timestamp: "05:00", timeAgo: "3 hrs ago", status: "posted", alertSent: false,
-  },
-];
+const MOCK_QUEUE = [];
 
 // ─── AGENT STATUS DATA ─────────────────────────────────────────────────────────
 const INITIAL_AGENTS = [
@@ -184,7 +131,22 @@ function AgentCard({ agent, onToggle }) {
 // ─── MAIN DASHBOARD ───────────────────────────────────────────────────────────
 
 export default function MaltaPulseDashboard() {
-  const [posts, setPosts] = useState(MOCK_QUEUE);
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/posts/all`);
+        const data = await res.json();
+        setPosts(data);
+        const breaking = data.find(p => p.isBreaking && p.status === "pending");
+        if (breaking) setBreakingAlert(breaking);
+      } catch(e) { console.error("Failed to fetch posts", e); }
+    };
+    fetchPosts();
+    const interval = setInterval(fetchPosts, 30000);
+    return () => clearInterval(interval);
+  }, []);
   const [agents, setAgents] = useState(INITIAL_AGENTS);
   const [selected, setSelected] = useState(null);
   const [editCaption, setEditCaption] = useState("");
@@ -192,7 +154,7 @@ export default function MaltaPulseDashboard() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState(null);
-  const [breakingAlert, setBreakingAlert] = useState(MOCK_QUEUE[0]);
+  const [breakingAlert, setBreakingAlert] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [settings, setSettings] = useState(() => {
     try {
@@ -228,14 +190,20 @@ export default function MaltaPulseDashboard() {
     setEditCaption(post.generatedPost);
   };
 
-  const handleApprove = (id) => {
+  const handleApprove = async (id) => {
+    try {
+      await fetch(`${API_URL}/api/posts/${id}/approve`, { method: "POST" });
+    } catch(e) { console.error("Approve failed", e); }
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: "approved", generatedPost: editCaption } : p));
     if (breakingAlert?.id === id) setBreakingAlert(null);
     showToast("✅ Post approved — ready to go live!");
     setLiveStats(s => ({ ...s, pending: Math.max(0, s.pending - 1) }));
   };
 
-  const handleReject = (id) => {
+  const handleReject = async (id) => {
+    try {
+      await fetch(`${API_URL}/api/posts/${id}/reject`, { method: "POST" });
+    } catch(e) { console.error("Reject failed", e); }
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: "rejected" } : p));
     setSelected(null);
     setBreakingAlert(null);
