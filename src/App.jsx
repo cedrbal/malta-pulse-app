@@ -26,6 +26,18 @@ const CAT_COLORS = {
   Lifestyle: "#e76f51",
 };
 
+const CAT_IMAGES = {
+  Breaking:    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=600&q=80",
+  News:        "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=600&q=80",
+  Weather:     "https://images.unsplash.com/photo-1592210454359-9043f067919b?w=600&q=80",
+  Traffic:     "https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=600&q=80",
+  Sports:      "https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=600&q=80",
+  Lifestyle:   "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80",
+  "World News":"https://images.unsplash.com/photo-1532274402911-5a369e4c4bb5?w=600&q=80",
+  Culture:     "https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=600&q=80",
+  Health:      "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=600&q=80",
+};
+
 const TONE_PROMPT = `You write in a casual, fun, hype Maltese English voice. Use emojis naturally, local references, and excitement. 
 For breaking news: urgent and punchy. For lifestyle/events: fun and engaging. Always write from scratch — never copy source text.
 Always end with a question or CTA to boost engagement. Use relevant hashtags.`;
@@ -70,10 +82,11 @@ function BreakingBanner({ post, onApprove, onDismiss }) {
 
 function PostCard({ post, onSelect, selected }) {
   const catColor = CAT_COLORS[post.category] || "#888";
+  const imgSrc = post.image || post.imageUrl || CAT_IMAGES[post.category] || CAT_IMAGES["News"];
   return (
     <div onClick={() => onSelect(post)} style={{ background: selected ? "#1e2533" : "#151b27", border: `1.5px solid ${selected ? catColor : "rgba(255,255,255,0.07)"}`, borderRadius: 12, overflow: "hidden", cursor: "pointer", transition: "all 0.2s", boxShadow: selected ? `0 0 20px ${catColor}44` : "none" }}>
       <div style={{ position: "relative", height: 130 }}>
-        <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.8 }} />
+        <img src={imgSrc} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.8 }} />
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%)" }} />
         <div style={{ position: "absolute", top: 8, left: 8, display: "flex", gap: 6 }}>
           <span style={{ background: catColor, color: "#fff", padding: "2px 10px", borderRadius: 20, fontSize: 10, fontWeight: 800, fontFamily: "system-ui", letterSpacing: 1, textTransform: "uppercase" }}>
@@ -166,17 +179,21 @@ export default function MaltaPulseDashboard() {
   useEffect(() => {
     try { localStorage.setItem("maltapulse_settings", JSON.stringify(settings)); } catch {}
   }, [settings]);
-  const [liveStats, setLiveStats] = useState({ scraped: 47, generated: 31, posted: 12, pending: 4 });
+  const [liveStats, setLiveStats] = useState({ scraped: 0, generated: 0, posted: 0, pending: 0 });
 
-  // Simulate live agent activity
+  // Fetch live stats from real API
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveStats(s => ({ ...s, scraped: s.scraped + Math.floor(Math.random() * 2) }));
-      setAgents(prev => prev.map(a => ({
-        ...a,
-        lastRun: a.status === "running" ? (Math.random() > 0.7 ? "Just now" : a.lastRun) : a.lastRun,
-      })));
-    }, 8000);
+    const fetchStats = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/stats`);
+        if (res.ok) {
+          const data = await res.json();
+          setLiveStats(data);
+        }
+      } catch (e) { console.error("Failed to fetch stats", e); }
+    };
+    fetchStats();
+    const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -187,7 +204,7 @@ export default function MaltaPulseDashboard() {
 
   const handleSelect = (post) => {
     setSelected(post);
-    setEditCaption(post.generatedPost);
+    setEditCaption(post.generatedPost || "");
   };
 
   const handleApprove = async (id) => {
@@ -307,7 +324,7 @@ export default function MaltaPulseDashboard() {
             { label: "Scraped Today", val: liveStats.scraped, color: "#457b9d" },
             { label: "Generated", val: liveStats.generated, color: "#a78bfa" },
             { label: "Posted", val: liveStats.posted, color: "#1877F2" },
-            { label: "Pending", val: posts.filter(p => p.status === "pending").length, color: "#fbbf24" },
+            { label: "Pending", val: liveStats.pending ?? posts.filter(p => p.status === "pending").length, color: "#fbbf24" },
           ].map(s => (
             <div key={s.label} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "6px 14px", textAlign: "center" }}>
               <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 18, fontWeight: 700, color: s.color }}>{s.val}</div>
@@ -389,7 +406,7 @@ export default function MaltaPulseDashboard() {
                   <button onClick={() => setSelected(null)} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "rgba(255,255,255,0.5)", width: 30, height: 30, borderRadius: "50%", cursor: "pointer", fontSize: 16 }}>✕</button>
                 </div>
 
-                <img src={selected.image} alt="" style={{ width: "100%", height: 180, objectFit: "cover" }} />
+                <img src={selected.image || selected.imageUrl || CAT_IMAGES[selected.category] || CAT_IMAGES["News"]} alt="" style={{ width: "100%", height: 180, objectFit: "cover" }} />
 
                 {/* FB Preview */}
                 <div style={{ margin: "16px 20px 0", background: "#1a1f2e", borderRadius: 10, padding: 16 }}>
