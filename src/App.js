@@ -141,7 +141,7 @@ function EditModal({ post, onSave, onClose }) {
 // ─── Post Card ────────────────────────────────────────────────────────────────
 function PostCard({ post, pickedImg, onApprove, onReject, onEdit, onPickImage, approving, rejecting }) {
   const [expanded, setExpanded] = useState(false);
-  const img = pickedImg || catImgs(post.category || 'News')[0];
+  const img = pickedImg || post.imageUrl || catImgs(post.category || 'News')[0];
   const text = post.generatedPost || '';
   const color = catColor(post.category);
   const status = postStatus(post);
