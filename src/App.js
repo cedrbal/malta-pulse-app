@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 
-const API_URL = 'https://ghz-given-idaho-arcade.trycloudflare.com';
+const API_URL = process.env.REACT_APP_API_URL || 'https://everybody-quotations-laboratory-laundry.trycloudflare.com';
 
 // ─── Category config ──────────────────────────────────────────────────────────
 const CAT_COLOR = {
@@ -147,10 +147,12 @@ function EditModal({ post, onSave, onClose }) {
 }
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
-function PostCard({ post, pickedImg, onApprove, onReject, onEdit, onPickImage, approving, rejecting }) {
+function PostCard({ post, index, pickedImg, onApprove, onReject, onEdit, onPickImage, approving, rejecting }) {
   const [expanded, setExpanded] = useState(false);
   const rawImg = pickedImg || post.imageUrl || '';
-  const img = rawImg ? proxyImg(rawImg) : catImgs(post.category || 'News')[0];
+  const imgs = catImgs(post.category || 'News');
+  const fallbackImg = imgs[index % imgs.length];
+  const img = rawImg ? proxyImg(rawImg) : fallbackImg;
   const text = post.generatedPost || '';
   const color = catColor(post.category);
   const status = postStatus(post);
@@ -164,7 +166,7 @@ function PostCard({ post, pickedImg, onApprove, onReject, onEdit, onPickImage, a
   return (
     <div style={S.card}>
       <div className="card-img-wrap" onClick={onPickImage}>
-        <img src={img} alt="" onError={e => { e.target.onerror=null; e.target.src = catImgs(post.category || 'News')[0]; }} />
+        <img src={img} alt="" onError={e => { e.target.onerror=null; e.target.src = fallbackImg; }} />
         <div className="card-img-overlay">📷 Change Image</div>
         {post.imageUrl && !pickedImg && <div style={{position:'absolute',top:6,left:6,background:'rgba(0,0,0,0.6)',color:'#4dbb87',fontSize:9,fontWeight:700,borderRadius:4,padding:'2px 6px',letterSpacing:0.5}}>SCRAPED</div>}
       </div>
@@ -418,6 +420,202 @@ function SettingsTab() {
   );
 }
 
+// ─── Facebook Tab ─────────────────────────────────────────────────────────────
+function FacebookTab({ posts, onPostToFb, busyApprove }) {
+  const [fbStatus, setFbStatus] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [preview, setPreview] = useState(null);
+
+  // Posts waiting for FB approval (auto-posted world news + any notifyFb)
+  const fbQueue = posts.filter(p => p.notifyFb && !p.facebookPostedAt);
+  // Already posted to FB
+  const posted  = posts.filter(p => p.facebookPostedAt).slice(0, 20);
+
+  async function checkConnection() {
+    setChecking(true); setFbStatus(null);
+    try {
+      const r = await fetch(`${API_URL}/api/fb-status`);
+      setFbStatus(await r.json());
+    } catch { setFbStatus({ valid: false, error: 'Cannot reach server' }); }
+    setChecking(false);
+  }
+
+  useEffect(() => { checkConnection(); }, []); // eslint-disable-line
+
+  function buildPreviewText(post) {
+    const title   = post.rawTitle || post.title || '';
+    const body    = post.generatedPost || '';
+    const excerpt = body.split(/[.!?]\s+/).slice(0, 2).join('. ') + '.';
+    const cat     = (post.category || 'News').replace(' ', '');
+    return `📰 ${title}\n\n${excerpt}\n\n🔗 Read more on maltapulse.net\n\n#Malta #MaltaNews #${cat} #MaltaPulse`;
+  }
+
+  return (
+    <div style={{ maxWidth: 860 }}>
+      {/* Connection status */}
+      <div style={{ ...S.settCard, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <div style={{ width: 40, height: 40, background: '#1877F2', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📘</div>
+          <div>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>Facebook Page Connection</div>
+            <div style={{ color: '#555', fontSize: 12 }}>Malta Pulse Facebook Page</div>
+          </div>
+          <div style={{ marginLeft: 'auto' }}>
+            <button style={S.btnGhost} onClick={checkConnection} disabled={checking}>
+              {checking ? 'Checking…' : '↺ Refresh'}
+            </button>
+          </div>
+        </div>
+        {fbStatus && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8,
+            background: fbStatus.valid ? 'rgba(77,187,135,0.08)' : 'rgba(255,107,107,0.08)',
+            border: `1px solid ${fbStatus.valid ? 'rgba(77,187,135,0.2)' : 'rgba(255,107,107,0.2)'}`,
+          }}>
+            <span style={{ fontSize: 18 }}>{fbStatus.valid ? '✅' : '❌'}</span>
+            <div>
+              {fbStatus.valid
+                ? <><span style={{ color: '#4dbb87', fontWeight: 600 }}>Connected</span><span style={{ color: '#666', fontSize: 12 }}> — {fbStatus.page_name} (ID: {fbStatus.page_id})</span></>
+                : <><span style={{ color: '#ff6b6b', fontWeight: 600 }}>Not connected</span><span style={{ color: '#666', fontSize: 12 }}> — {fbStatus.error}</span></>
+              }
+            </div>
+            {!fbStatus.valid && (
+              <button style={{ ...S.btnRed, marginLeft: 'auto', fontSize: 12 }} onClick={() => {}}>
+                → Configure in Settings
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* FB Queue — needs approval */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <h2 style={{ color: '#fff', fontSize: 17, fontWeight: 700, margin: 0 }}>
+            📬 Needs Facebook Approval
+          </h2>
+          {fbQueue.length > 0 && (
+            <span style={{ background: '#CE1126', color: '#fff', borderRadius: 10, padding: '2px 9px', fontSize: 12, fontWeight: 700 }}>
+              {fbQueue.length}
+            </span>
+          )}
+        </div>
+        {fbQueue.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#333' }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+            <div>No posts waiting for Facebook approval</div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {fbQueue.map((post, idx) => {
+              const imgs = catImgs(post.category || 'News');
+              const img = post.imageUrl ? proxyImg(post.imageUrl) : imgs[idx % imgs.length];
+              const busy = busyApprove[post.id];
+              return (
+                <div key={post.id} style={{ ...S.card, flexDirection: 'row', overflow: 'hidden' }}>
+                  <div style={{ width: 120, flexShrink: 0, background: '#0a0a0a', overflow: 'hidden' }}>
+                    <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={e => { e.target.onerror = null; e.target.src = imgs[idx % imgs.length]; }} />
+                  </div>
+                  <div style={{ flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span style={{ background: 'rgba(24,119,242,0.12)', color: '#60aaff', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 }}>
+                        📘 Auto-posted to site
+                      </span>
+                      {post.isAutoPosted && (
+                        <span style={{ background: 'rgba(77,187,135,0.1)', color: '#4dbb87', fontSize: 11, padding: '2px 8px', borderRadius: 4 }}>
+                          ⚡ World News Verified
+                        </span>
+                      )}
+                      <span style={{ color: '#444', fontSize: 11, marginLeft: 'auto' }}>{timeAgo(post.timestamp)}</span>
+                    </div>
+                    <div style={{ color: '#f0f0f0', fontWeight: 600, fontSize: 14, lineHeight: 1.4 }}>
+                      {post.rawTitle || post.title}
+                    </div>
+                    {post.source && <div style={{ color: '#555', fontSize: 12 }}>📰 {post.source}</div>}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 8 }}>
+                      <button style={{ ...S.btnSm, background: 'rgba(24,119,242,0.15)', color: '#60aaff', border: '1px solid rgba(24,119,242,0.3)', fontSize: 12 }}
+                        onClick={() => setPreview(post)}>
+                        👁 Preview
+                      </button>
+                      <button style={{ ...S.btnSm, background: '#1877F2', color: '#fff', fontSize: 12 }}
+                        onClick={() => onPostToFb(post)} disabled={!!busy}>
+                        {busy ? '⟳ Posting…' : '📘 Post to Facebook'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Already posted */}
+      {posted.length > 0 && (
+        <div>
+          <h2 style={{ color: '#555', fontSize: 15, fontWeight: 700, marginBottom: 14 }}>✓ Recently Posted to Facebook</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {posted.map(post => (
+              <div key={post.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#161616', borderRadius: 8, border: '1px solid #1a1a1a' }}>
+                <span style={{ fontSize: 18 }}>✅</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: '#bbb', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {post.rawTitle || post.title}
+                  </div>
+                  {post.facebookPostId && (
+                    <div style={{ color: '#444', fontSize: 11 }}>FB Post ID: {post.facebookPostId}</div>
+                  )}
+                </div>
+                <div style={{ color: '#444', fontSize: 11, flexShrink: 0 }}>{timeAgo(post.facebookPostedAt)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Preview modal */}
+      {preview && (
+        <div style={S.overlay} onClick={() => setPreview(null)}>
+          <div style={{ ...S.modal, width: 'min(480px,95vw)' }} onClick={e => e.stopPropagation()}>
+            <div style={S.modalHead}>
+              <span style={{ color: '#fff', fontWeight: 700 }}>📘 Facebook Post Preview</span>
+              <button style={S.xBtn} onClick={() => setPreview(null)}>✕</button>
+            </div>
+            <div style={{ padding: '16px 20px 20px' }}>
+              {/* FB-style card */}
+              <div style={{ background: '#fff', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px 8px' }}>
+                  <div style={{ width: 36, height: 36, background: '#CE1126', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>MP</div>
+                  <div>
+                    <div style={{ color: '#050505', fontWeight: 700, fontSize: 14 }}>Malta Pulse</div>
+                    <div style={{ color: '#65676b', fontSize: 11 }}>Just now · 🌐</div>
+                  </div>
+                </div>
+                <div style={{ color: '#050505', fontSize: 14, padding: '0 14px 10px', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {buildPreviewText(preview)}
+                </div>
+                {(preview.imageUrl) && (
+                  <img src={proxyImg(preview.imageUrl)} alt="" style={{ width: '100%', display: 'block', maxHeight: 260, objectFit: 'cover' }}
+                    onError={e => { e.target.style.display = 'none'; }} />
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button style={S.btnGhost} onClick={() => setPreview(null)}>Cancel</button>
+                <button style={{ ...S.btnRed, background: '#1877F2' }}
+                  onClick={() => { onPostToFb(preview); setPreview(null); }}
+                  disabled={!!busyApprove[preview.id]}>
+                  📘 Confirm & Post to Facebook
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState('queue');
@@ -553,6 +751,7 @@ export default function App() {
         <div style={{maxWidth:1240, margin:'0 auto', padding:'0 16px', display:'flex', gap:2, overflowX:'auto'}}>
           {[
             { key:'queue',    label:'Post Queue', icon:'📋', badge: counts.pending || null },
+            { key:'facebook', label:'Facebook',   icon:'📘', badge: posts.filter(p => p.notifyFb && !p.facebookPostedAt).length || null },
             { key:'agents',   label:'Agents',     icon:'🤖' },
             { key:'settings', label:'Settings',   icon:'⚙️' },
           ].map(t => (
@@ -612,10 +811,11 @@ export default function App() {
               </div>
             ) : (
               <div className="post-grid" style={{display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:14}}>
-                {filtered.map(post => (
+                {filtered.map((post, idx) => (
                   <PostCard
                     key={post.id}
                     post={editedTexts[post.id] !== undefined ? {...post, generatedPost:editedTexts[post.id]} : post}
+                    index={idx}
                     pickedImg={pickedImgs[post.id]}
                     onApprove={(target) => handleApprove(post, target)}
                     onReject={() => handleReject(post)}
@@ -630,6 +830,13 @@ export default function App() {
           </div>
         )}
 
+        {tab === 'facebook' && (
+          <FacebookTab
+            posts={posts}
+            busyApprove={busyApprove}
+            onPostToFb={post => handleApprove(post, 'facebook')}
+          />
+        )}
         {tab === 'agents' && <AgentsTab agents={agents} loading={loadingAgents} onRefresh={fetchAgents} />}
         {tab === 'settings' && <SettingsTab />}
       </div>
