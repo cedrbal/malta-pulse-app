@@ -22,11 +22,14 @@ const CAT_IMGS = {
 };
 const DEFAULT_IMGS = ['photo-1507003211169-0a1dd7228f2d','photo-1504711434969-e33886168f5c','photo-1541872703-74c5e44368f9'];
 const AGENT_DEFS = [
-  { key:'news',       name:'News Agent',        icon:'📰', desc:'Scrapes RSS feeds every 5 mins' },
-  { key:'weather',    name:'Weather Agent',      icon:'🌤️', desc:'Tomorrow.io every 30 mins' },
-  { key:'traffic',    name:'Traffic Agent',      icon:'🚗', desc:'Google Maps live traffic' },
-  { key:'seo',        name:'SEO/Trending Agent', icon:'📈', desc:'Monitors viral Malta content' },
-  { key:'supervisor', name:'Supervisor Agent',   icon:'🛡️', desc:'Checks all agents are running' },
+  { key:'news',             name:'News Agent',             icon:'📰', desc:'Scrapes Malta RSS feeds every 5 mins' },
+  { key:'weather',          name:'Weather Agent',           icon:'🌤️', desc:'Tomorrow.io every 30 mins' },
+  { key:'traffic',          name:'Traffic Agent',           icon:'🚗', desc:'Google Maps live traffic every 5 mins' },
+  { key:'seo',              name:'SEO Blog Agent',          icon:'📝', desc:'Generates Malta SEO blog posts every 8h' },
+  { key:'world_supervisor', name:'World News Supervisor',   icon:'🌍', desc:'Verifies stories from 20+ global sources' },
+  { key:'shows',            name:'Shows Agent',             icon:'🎭', desc:'Scrapes Malta events every hour' },
+  { key:'paid_events',      name:'Paid Events Agent',       icon:'🎟️', desc:'Scrapes ShowsHappening.com every 6h' },
+  { key:'supervisor',       name:'System Supervisor',       icon:'🛡️', desc:'Checks all agents are running' },
 ];
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -155,10 +158,17 @@ function PostCard({ post, pickedImg, onApprove, onReject, onEdit, onPickImage, a
   return (
     <div style={S.card}>
       <div className="card-img-wrap" onClick={onPickImage}>
-        <img src={img} alt="" onError={e => { e.target.style.display='none'; }} />
+        <img src={img} alt="" onError={e => { e.target.src = catImgs(post.category || 'News')[1] || catImgs('News')[0]; }} />
         <div className="card-img-overlay">📷 Change Image</div>
+        {post.imageUrl && !pickedImg && <div style={{position:'absolute',top:6,left:6,background:'rgba(0,0,0,0.6)',color:'#4dbb87',fontSize:9,fontWeight:700,borderRadius:4,padding:'2px 6px',letterSpacing:0.5}}>SCRAPED</div>}
       </div>
       <div style={{padding:'14px 16px', flex:1, display:'flex', flexDirection:'column', gap:8}}>
+        {post.notifyFb && post.isAutoPosted && (
+          <div style={{background:'rgba(24,119,242,0.1)',border:'1px solid rgba(24,119,242,0.25)',borderRadius:7,padding:'7px 10px',fontSize:12,color:'#60aaff',display:'flex',gap:6,alignItems:'center'}}>
+            <span>📘</span>
+            <span><strong>Auto-posted to site</strong> — approve for Facebook?</span>
+          </div>
+        )}
         <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center'}}>
           <span style={{background:color+'20', color, fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:4, letterSpacing:0.5, textTransform:'uppercase'}}>
             {post.category || 'News'}
@@ -168,6 +178,9 @@ function PostCard({ post, pickedImg, onApprove, onReject, onEdit, onPickImage, a
           </span>
           {post.isBreaking && (
             <span style={{background:'rgba(206,17,38,0.15)', color:'#CE1126', fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:4}}>🔴 Breaking</span>
+          )}
+          {post.isAutoPosted && (
+            <span style={{background:'rgba(77,187,135,0.1)', color:'#4dbb87', fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:4}}>⚡ Auto-posted</span>
           )}
           <span style={{color:'#444', fontSize:11, marginLeft:'auto'}}>{timeAgo(post.timestamp || post.createdAt)}</span>
         </div>
@@ -460,7 +473,9 @@ export default function App() {
     try {
       const body = { publishTarget };
       if (editedTexts[post.id] !== undefined) body.generatedPost = editedTexts[post.id];
-      if (pickedImgs[post.id]) body.imageUrl = pickedImgs[post.id];
+      // Always send imageUrl: picked overrides scraped, scraped overrides nothing
+      const imgToSend = pickedImgs[post.id] || post.imageUrl;
+      if (imgToSend) body.imageUrl = imgToSend;
       if (fbToken) body.fbToken = fbToken;
       const r = await fetch(`${API_URL}/api/posts/${post.id}/approve`, {
         method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
