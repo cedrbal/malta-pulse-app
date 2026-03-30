@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 
-const API_URL = 'https://safer-sandwich-brian-springs.trycloudflare.com';
+const API_URL = 'https://ghz-given-idaho-arcade.trycloudflare.com';
 
 // ─── Category config ──────────────────────────────────────────────────────────
 const CAT_COLOR = {
