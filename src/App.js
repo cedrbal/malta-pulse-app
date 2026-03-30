@@ -1,518 +1,632 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useCallback } from 'react';
+import './App.css';
 
-const API_URL = "https://safer-sandwich-brian-springs.trycloudflare.com";
+const API_URL = 'https://safer-sandwich-brian-springs.trycloudflare.com';
 
-// ─── CONSTANTS ────────────────────────────────────────────────────────────────
-
-const SOURCES = [
-  { id: "tom", name: "Times of Malta", icon: "🗞️", category: "News", color: "#e63946" },
-  { id: "ind", name: "Malta Independent", icon: "📰", category: "News", color: "#457b9d" },
-  { id: "mtd", name: "MaltaToday", icon: "📡", category: "News", color: "#2d6a4f" },
-  { id: "lovin", name: "Lovin Malta", icon: "❤️", category: "Lifestyle", color: "#e76f51" },
-  { id: "md", name: "Malta Daily", icon: "☀️", category: "News", color: "#f4a261" },
-  { id: "sport", name: "Malta Sports", icon: "⚽", category: "Sports", color: "#264653" },
-  { id: "weather", name: "MeteoCiel / MET", icon: "🌤️", category: "Weather", color: "#48cae4" },
-  { id: "traffic", name: "Google Maps / Waze", icon: "🚗", category: "Traffic", color: "#6a994e" },
+// ─── Category config ──────────────────────────────────────────────────────────
+const CAT_COLOR = {
+  Breaking:'#CE1126', News:'#1877F2', Weather:'#1a6fb5',
+  Traffic:'#FF6B35', Sports:'#2d9e6b', Lifestyle:'#e91e8c',
+  'World News':'#7B2FBE', Culture:'#E8B922', Health:'#27ae60',
+};
+const CAT_IMGS = {
+  Breaking:    ['photo-1504384308090-c894fdcc538d','photo-1495020689067-958852a7765e','photo-1504711434969-e33886168f5c','photo-1557804506-669a67965ba0'],
+  News:        ['photo-1504711434969-e33886168f5c','photo-1529107386315-e1a2ed48a620','photo-1541872703-74c5e44368f9','photo-1477959858617-67f85cf4f1df'],
+  Weather:     ['photo-1561553873-e8491a564fd0','photo-1592210454359-9043f067919b','photo-1504608524841-42584120d693','photo-1516912481808-3406841bd33c'],
+  Traffic:     ['photo-1477959858617-67f85cf4f1df','photo-1519003722824-194d4455a60c','photo-1567784177951-6fa58317e16b','photo-1489824904134-891ab64532f1'],
+  Sports:      ['photo-1522778119026-d647f0596c20','photo-1461896836934-ffe607ba8211','photo-1579952363873-27f3bade9f55','photo-1560272564-c83b66b1ad12'],
+  Lifestyle:   ['photo-1516483638261-f4dbaf036963','photo-1414235077428-338989a2e8c0','photo-1504674900247-0877df9cc836','photo-1540189549336-e6e99c3679fe','photo-1517248135467-4c7edcad34c4','photo-1555396273-367ea4eb4db5'],
+  'World News':['photo-1532274402911-5a369e4c4bb5','photo-1451187580459-43490279c0fa','photo-1507003211169-0a1dd7228f2d','photo-1526778548025-fa2f459cd5ce'],
+  Culture:     ['photo-1514320291840-2e0a9bf2a9ae','photo-1533090161767-e6ffed986c88','photo-1493225457124-a3eb161ffa5f'],
+  Health:      ['photo-1519494026892-80bbd2d6fd0d','photo-1505751172876-fa1923c5c528','photo-1576091160550-2173dba999ef'],
+};
+const DEFAULT_IMGS = ['photo-1507003211169-0a1dd7228f2d','photo-1504711434969-e33886168f5c','photo-1541872703-74c5e44368f9'];
+const AGENT_DEFS = [
+  { key:'news',       name:'News Agent',        icon:'📰', desc:'Scrapes RSS feeds every 5 mins' },
+  { key:'weather',    name:'Weather Agent',      icon:'🌤️', desc:'Tomorrow.io every 30 mins' },
+  { key:'traffic',    name:'Traffic Agent',      icon:'🚗', desc:'Google Maps live traffic' },
+  { key:'seo',        name:'SEO/Trending Agent', icon:'📈', desc:'Monitors viral Malta content' },
+  { key:'supervisor', name:'Supervisor Agent',   icon:'🛡️', desc:'Checks all agents are running' },
 ];
 
-const CATEGORIES = ["All", "Breaking", "News", "Weather", "Traffic", "Sports", "Lifestyle"];
-
-const CAT_COLORS = {
-  Breaking: "#e63946",
-  News: "#457b9d",
-  Weather: "#48cae4",
-  Traffic: "#6a994e",
-  Sports: "#264653",
-  Lifestyle: "#e76f51",
-};
-
-const CAT_IMAGES = {
-  Breaking:    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=600&q=80",
-  News:        "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=600&q=80",
-  Weather:     "https://images.unsplash.com/photo-1592210454359-9043f067919b?w=600&q=80",
-  Traffic:     "https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=600&q=80",
-  Sports:      "https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=600&q=80",
-  Lifestyle:   "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80",
-  "World News":"https://images.unsplash.com/photo-1532274402911-5a369e4c4bb5?w=600&q=80",
-  Culture:     "https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=600&q=80",
-  Health:      "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=600&q=80",
-};
-
-const TONE_PROMPT = `You write in a casual, fun, hype Maltese English voice. Use emojis naturally, local references, and excitement. 
-For breaking news: urgent and punchy. For lifestyle/events: fun and engaging. Always write from scratch — never copy source text.
-Always end with a question or CTA to boost engagement. Use relevant hashtags.`;
-
-const MOCK_QUEUE = [];
-
-// ─── AGENT STATUS DATA ─────────────────────────────────────────────────────────
-const INITIAL_AGENTS = [
-  { id: "news", name: "News Agent", icon: "🗞️", status: "running", lastRun: "2 min ago", nextRun: "3 min", postsFound: 14, sources: ["Times of Malta", "Malta Independent", "MaltaToday", "Malta Daily"] },
-  { id: "social", name: "Social Agent", icon: "📱", status: "running", lastRun: "5 min ago", nextRun: "5 min", postsFound: 7, sources: ["Lovin Malta", "Malta Daily FB", "Sports Pages"] },
-  { id: "weather", name: "Weather Agent", icon: "🌤️", status: "running", lastRun: "45 min ago", nextRun: "15 min", postsFound: 2, sources: ["MeteoCiel", "MET Malta", "Open-Meteo"] },
-  { id: "traffic", name: "Traffic Agent", icon: "🚗", status: "running", lastRun: "1 min ago", nextRun: "2 min", postsFound: 3, sources: ["Google Maps API", "Waze API"] },
-  { id: "alert", name: "Alert Agent", icon: "🚨", status: "running", lastRun: "Just now", nextRun: "always on", postsFound: 1, sources: ["WhatsApp", "Email"] },
-];
-
-// ─── COMPONENTS ───────────────────────────────────────────────────────────────
-
-function AgentPulse({ status }) {
-  return (
-    <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: status === "running" ? "#4ade80" : status === "paused" ? "#fbbf24" : "#f87171", boxShadow: status === "running" ? "0 0 0 3px rgba(74,222,128,0.25)" : "none", animation: status === "running" ? "pulse 2s infinite" : "none" }} />
-  );
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function uImg(id) { return `https://images.unsplash.com/${id}?w=600&q=80`; }
+function catImgs(cat) { return (CAT_IMGS[cat] || DEFAULT_IMGS).map(uImg); }
+function catColor(cat) { return CAT_COLOR[cat] || '#666'; }
+function timeAgo(ts) {
+  if (!ts) return 'Just now';
+  const d = Math.floor((Date.now() - new Date(ts)) / 1000);
+  if (d < 60) return `${d}s ago`;
+  if (d < 3600) return `${Math.floor(d/60)}m ago`;
+  if (d < 86400) return `${Math.floor(d/3600)}h ago`;
+  return `${Math.floor(d/86400)}d ago`;
 }
+function postStatus(p) { return p.status || p.approvalStatus || 'pending'; }
 
-function BreakingBanner({ post, onApprove, onDismiss }) {
+// ─── Shared styles ────────────────────────────────────────────────────────────
+const S = {
+  card:       { background:'#161616', borderRadius:12, border:'1px solid #222', overflow:'hidden', display:'flex', flexDirection:'column' },
+  input:      { width:'100%', background:'#0d0d0d', border:'1px solid #2a2a2a', borderRadius:8, padding:'10px 12px', color:'#fff', fontSize:14, boxSizing:'border-box' },
+  label:      { color:'#888', fontSize:12, fontWeight:600, display:'block', marginBottom:6, letterSpacing:0.4, textTransform:'uppercase' },
+  btnRed:     { background:'#CE1126', color:'#fff', border:'none', padding:'9px 18px', borderRadius:8, fontWeight:600, fontSize:13, cursor:'pointer' },
+  btnGhost:   { background:'transparent', color:'#888', border:'1px solid #2a2a2a', padding:'9px 18px', borderRadius:8, fontWeight:600, fontSize:13, cursor:'pointer' },
+  btnSm:      { padding:'6px 12px', borderRadius:7, fontSize:12, fontWeight:600, cursor:'pointer', border:'none' },
+  btnSmGhost: { background:'transparent', color:'#777', border:'1px solid #222', padding:'6px 12px', borderRadius:7, fontSize:12, fontWeight:600, cursor:'pointer' },
+  overlay:    { position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:16 },
+  modal:      { background:'#161616', borderRadius:14, width:'min(520px,95vw)', border:'1px solid #2a2a2a', boxShadow:'0 24px 60px rgba(0,0,0,0.7)', maxHeight:'90vh', overflowY:'auto' },
+  modalHead:  { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 20px', borderBottom:'1px solid #222' },
+  xBtn:       { background:'transparent', border:'none', color:'#666', fontSize:20, cursor:'pointer', lineHeight:1, padding:'0 4px' },
+  settCard:   { background:'#161616', borderRadius:12, border:'1px solid #222', padding:22, marginBottom:16 },
+};
+
+// ─── Image Picker Modal ───────────────────────────────────────────────────────
+function ImagePickerModal({ post, onPick, onClose }) {
+  const [custom, setCustom] = useState('');
+  const imgs = catImgs(post.category || 'News');
   return (
-    <div style={{ background: "linear-gradient(135deg, #e63946, #c1121f)", color: "#fff", padding: "14px 24px", display: "flex", alignItems: "center", gap: 16, animation: "slideDown 0.4s ease" }}>
-      <span style={{ fontSize: 22, animation: "shake 0.5s infinite" }}>🚨</span>
-      <div style={{ flex: 1 }}>
-        <span style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 3, opacity: 0.8, textTransform: "uppercase" }}>Breaking Alert</span>
-        <div style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 16 }}>{post.rawTitle}</div>
-        <div style={{ fontSize: 12, opacity: 0.75, fontFamily: "system-ui", marginTop: 2 }}>WhatsApp & Email alert sent • {post.timeAgo}</div>
+    <div style={S.overlay} onClick={onClose}>
+      <div style={S.modal} onClick={e => e.stopPropagation()}>
+        <div style={S.modalHead}>
+          <span style={{color:'#fff', fontWeight:700, fontSize:16}}>🖼 Pick Image</span>
+          <button style={S.xBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={{padding:'16px 20px 20px'}}>
+          <p style={{color:'#777', fontSize:13, marginBottom:14}}>
+            Category: <strong style={{color:'#bbb'}}>{post.category || 'News'}</strong> — click a photo or paste a custom URL
+          </p>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:16}}>
+            {imgs.map((url, i) => (
+              <div key={i} className="img-opt" onClick={() => onPick(url)}>
+                <img src={url} alt="" />
+              </div>
+            ))}
+          </div>
+          <div style={{display:'flex', gap:8}}>
+            <input
+              className="mp-input"
+              style={{...S.input, flex:1}}
+              placeholder="Or paste a custom image URL…"
+              value={custom}
+              onChange={e => setCustom(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && custom && onPick(custom)}
+            />
+            <button style={{...S.btnRed, opacity: custom ? 1 : 0.4}} disabled={!custom} onClick={() => onPick(custom)}>Use</button>
+          </div>
+        </div>
       </div>
-      <button onClick={onApprove} style={{ background: "#fff", color: "#e63946", border: "none", padding: "8px 20px", borderRadius: 8, fontWeight: 800, cursor: "pointer", fontFamily: "system-ui", fontSize: 13 }}>
-        ✅ APPROVE NOW
-      </button>
-      <button onClick={onDismiss} style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "none", padding: "8px 14px", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontFamily: "system-ui", fontSize: 13 }}>
-        Review Later
-      </button>
     </div>
   );
 }
 
-function PostCard({ post, onSelect, selected }) {
-  const catColor = CAT_COLORS[post.category] || "#888";
-  const imgSrc = post.image || post.imageUrl || CAT_IMAGES[post.category] || CAT_IMAGES["News"];
+// ─── Edit Modal ───────────────────────────────────────────────────────────────
+function EditModal({ post, onSave, onClose }) {
+  const [text, setText] = useState(post.generatedPost || '');
   return (
-    <div onClick={() => onSelect(post)} style={{ background: selected ? "#1e2533" : "#151b27", border: `1.5px solid ${selected ? catColor : "rgba(255,255,255,0.07)"}`, borderRadius: 12, overflow: "hidden", cursor: "pointer", transition: "all 0.2s", boxShadow: selected ? `0 0 20px ${catColor}44` : "none" }}>
-      <div style={{ position: "relative", height: 130 }}>
-        <img src={imgSrc} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.8 }} />
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%)" }} />
-        <div style={{ position: "absolute", top: 8, left: 8, display: "flex", gap: 6 }}>
-          <span style={{ background: catColor, color: "#fff", padding: "2px 10px", borderRadius: 20, fontSize: 10, fontWeight: 800, fontFamily: "system-ui", letterSpacing: 1, textTransform: "uppercase" }}>
-            {post.isBreaking ? "🔴 BREAKING" : post.category}
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{...S.modal, width:'min(720px,95vw)'}} onClick={e => e.stopPropagation()}>
+        <div style={S.modalHead}>
+          <span style={{color:'#fff', fontWeight:700, fontSize:16}}>✏️ Edit Article</span>
+          <button style={S.xBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={{padding:'16px 20px 20px'}}>
+          <div style={{color:'#ccc', fontSize:14, fontWeight:600, marginBottom:12, lineHeight:1.4}}>
+            {post.rawTitle || post.title}
+          </div>
+          <textarea
+            className="mp-input"
+            style={{...S.input, height:320, resize:'vertical', lineHeight:1.7, fontSize:14, fontFamily:'inherit'}}
+            value={text}
+            onChange={e => setText(e.target.value)}
+          />
+          <div style={{display:'flex', gap:8, justifyContent:'flex-end', marginTop:14}}>
+            <button style={S.btnGhost} onClick={onClose}>Cancel</button>
+            <button style={S.btnRed} onClick={() => onSave(text)}>Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Post Card ────────────────────────────────────────────────────────────────
+function PostCard({ post, pickedImg, onApprove, onReject, onEdit, onPickImage, approving, rejecting }) {
+  const [expanded, setExpanded] = useState(false);
+  const img = pickedImg || catImgs(post.category || 'News')[0];
+  const text = post.generatedPost || '';
+  const color = catColor(post.category);
+  const status = postStatus(post);
+  const STATUS_BADGE = {
+    pending:  { bg:'rgba(96,170,255,0.12)',  color:'#60aaff', label:'Pending' },
+    approved: { bg:'rgba(77,187,135,0.12)',  color:'#4dbb87', label:'Approved' },
+    rejected: { bg:'rgba(255,107,107,0.12)', color:'#ff6b6b', label:'Rejected' },
+  };
+  const badge = STATUS_BADGE[status] || { bg:'#222', color:'#888', label: status };
+
+  return (
+    <div style={S.card}>
+      <div className="card-img-wrap" onClick={onPickImage}>
+        <img src={img} alt="" onError={e => { e.target.style.display='none'; }} />
+        <div className="card-img-overlay">📷 Change Image</div>
+      </div>
+      <div style={{padding:'14px 16px', flex:1, display:'flex', flexDirection:'column', gap:8}}>
+        <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center'}}>
+          <span style={{background:color+'20', color, fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:4, letterSpacing:0.5, textTransform:'uppercase'}}>
+            {post.category || 'News'}
           </span>
+          <span style={{background:badge.bg, color:badge.color, fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:4}}>
+            {badge.label}
+          </span>
+          {post.isBreaking && (
+            <span style={{background:'rgba(206,17,38,0.15)', color:'#CE1126', fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:4}}>🔴 Breaking</span>
+          )}
+          <span style={{color:'#444', fontSize:11, marginLeft:'auto'}}>{timeAgo(post.timestamp || post.createdAt)}</span>
         </div>
-        <div style={{ position: "absolute", top: 8, right: 8 }}>
-          {post.status === "pending" && <span style={{ background: "#fbbf24", color: "#000", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 800, fontFamily: "system-ui" }}>PENDING</span>}
-          {post.status === "approved" && <span style={{ background: "#4ade80", color: "#000", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 800, fontFamily: "system-ui" }}>APPROVED</span>}
-          {post.status === "posted" && <span style={{ background: "#1877F2", color: "#fff", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 800, fontFamily: "system-ui" }}>POSTED</span>}
-          {post.status === "rejected" && <span style={{ background: "#f87171", color: "#fff", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 800, fontFamily: "system-ui" }}>REJECTED</span>}
+        <div style={{color:'#f0f0f0', fontWeight:700, fontSize:15, lineHeight:1.4}}>
+          {post.rawTitle || post.title || '(No title)'}
         </div>
-        <div style={{ position: "absolute", bottom: 8, left: 10, right: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: "'Oswald', sans-serif", lineHeight: 1.3 }}>{post.rawTitle}</div>
+        {post.source && <div style={{color:'#555', fontSize:12}}>📰 {post.source}</div>}
+        {text && (
+          <div style={{color:'#777', fontSize:13, lineHeight:1.65, flex:1}}>
+            {expanded ? text : text.slice(0, 220) + (text.length > 220 ? '…' : '')}
+            {text.length > 220 && (
+              <button style={{background:'none', border:'none', color:'#CE1126', cursor:'pointer', fontSize:12, fontWeight:600, padding:'0 4px'}} onClick={() => setExpanded(!expanded)}>
+                {expanded ? ' Less' : ' More'}
+              </button>
+            )}
+          </div>
+        )}
+        <div style={{display:'flex', gap:6, flexWrap:'wrap', paddingTop:8, borderTop:'1px solid #1e1e1e', marginTop:'auto'}}>
+          <button style={S.btnSmGhost} onClick={onEdit}>✏️ Edit</button>
+          <button style={S.btnSmGhost} onClick={onPickImage}>🖼 Image</button>
+          <div style={{flex:1}} />
+          {status !== 'approved' && (
+            <button className="btn-approve" style={{...S.btnSm, background:'rgba(77,187,135,0.1)', color:'#4dbb87', border:'1px solid rgba(77,187,135,0.2)'}} onClick={onApprove} disabled={approving}>
+              {approving ? '…' : '✓ Approve'}
+            </button>
+          )}
+          {status !== 'rejected' && (
+            <button className="btn-reject" style={{...S.btnSm, background:'rgba(255,107,107,0.1)', color:'#ff6b6b', border:'1px solid rgba(255,107,107,0.2)'}} onClick={onReject} disabled={rejecting}>
+              {rejecting ? '…' : '✕ Reject'}
+            </button>
+          )}
         </div>
-      </div>
-      <div style={{ padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontFamily: "system-ui" }}>{post.sourceIcon} {post.source}</span>
-        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontFamily: "system-ui" }}>{post.timeAgo}</span>
       </div>
     </div>
   );
 }
 
-function AgentCard({ agent, onToggle }) {
+// ─── Agents Tab ───────────────────────────────────────────────────────────────
+function AgentsTab({ agents, loading, onRefresh }) {
   return (
-    <div style={{ background: "#151b27", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "14px 16px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 18 }}>{agent.icon}</span>
-          <div>
-            <div style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 14, color: "#fff" }}>{agent.name}</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "system-ui", marginTop: 1 }}>Next: {agent.nextRun}</div>
-          </div>
+    <div>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
+        <div>
+          <h2 style={{color:'#fff', fontSize:18, fontWeight:700, marginBottom:4}}>Agent Status</h2>
+          <p style={{color:'#444', fontSize:13}}>Auto-refreshes every 30 seconds</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <AgentPulse status={agent.status} />
-          <button onClick={() => onToggle(agent.id)} style={{ background: "rgba(255,255,255,0.08)", border: "none", color: "rgba(255,255,255,0.6)", padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: "system-ui" }}>
-            {agent.status === "running" ? "⏸ Pause" : "▶ Start"}
-          </button>
-        </div>
+        <button style={S.btnGhost} onClick={onRefresh} disabled={loading}>{loading ? '↻ Refreshing…' : '↺ Refresh Now'}</button>
       </div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {agent.sources.map(s => (
-          <span key={s} style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontFamily: "system-ui" }}>{s}</span>
-        ))}
-      </div>
-      <div style={{ marginTop: 8, fontSize: 11, color: "rgba(255,255,255,0.35)", fontFamily: "system-ui" }}>
-        Last run: {agent.lastRun} · {agent.postsFound} items found
-      </div>
-    </div>
-  );
-}
-
-// ─── MAIN DASHBOARD ───────────────────────────────────────────────────────────
-
-export default function MaltaPulseDashboard() {
-  const [posts, setPosts] = useState([]);
-
-  useEffect(() => {
-    const fetchPosts = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/posts/all`);
-        const data = await res.json();
-        setPosts(data);
-        const breaking = data.find(p => p.isBreaking && p.status === "pending");
-        if (breaking) setBreakingAlert(breaking);
-      } catch(e) { console.error("Failed to fetch posts", e); }
-    };
-    fetchPosts();
-    const interval = setInterval(fetchPosts, 30000);
-    return () => clearInterval(interval);
-  }, []);
-  const [agents, setAgents] = useState(INITIAL_AGENTS);
-  const [selected, setSelected] = useState(null);
-  const [editCaption, setEditCaption] = useState("");
-  const [activeTab, setActiveTab] = useState("queue");
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [showSettings, setShowSettings] = useState(false);
-  const [toast, setToast] = useState(null);
-  const [breakingAlert, setBreakingAlert] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [settings, setSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem("maltapulse_settings");
-      return saved ? JSON.parse(saved) : { fbToken: "", fbPageId: "", whatsapp: "", email: "", claudeKey: "" };
-    } catch { return { fbToken: "", fbPageId: "", whatsapp: "", email: "", claudeKey: "" }; }
-  });
-
-  useEffect(() => {
-    try { localStorage.setItem("maltapulse_settings", JSON.stringify(settings)); } catch {}
-  }, [settings]);
-  const [liveStats, setLiveStats] = useState({ scraped: 0, generated: 0, posted: 0, pending: 0 });
-
-  // Fetch live stats from real API
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/stats`);
-        if (res.ok) {
-          const data = await res.json();
-          setLiveStats(data);
-        }
-      } catch (e) { console.error("Failed to fetch stats", e); }
-    };
-    fetchStats();
-    const interval = setInterval(fetchStats, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const showToast = (msg, type = "ok") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
-  };
-
-  const handleSelect = (post) => {
-    setSelected(post);
-    setEditCaption(post.generatedPost || "");
-  };
-
-  const handleApprove = async (id) => {
-    try {
-      await fetch(`${API_URL}/api/posts/${id}/approve`, { method: "POST" });
-    } catch(e) { console.error("Approve failed", e); }
-    setPosts(prev => prev.map(p => p.id === id ? { ...p, status: "approved", generatedPost: editCaption } : p));
-    if (breakingAlert?.id === id) setBreakingAlert(null);
-    showToast("✅ Post approved — ready to go live!");
-    setLiveStats(s => ({ ...s, pending: Math.max(0, s.pending - 1) }));
-  };
-
-  const handleReject = async (id) => {
-    try {
-      await fetch(`${API_URL}/api/posts/${id}/reject`, { method: "POST" });
-    } catch(e) { console.error("Reject failed", e); }
-    setPosts(prev => prev.map(p => p.id === id ? { ...p, status: "rejected" } : p));
-    setSelected(null);
-    setBreakingAlert(null);
-    showToast("❌ Post rejected.", "err");
-  };
-
-  const handlePost = async (post) => {
-    if (!settings.fbToken || !settings.fbPageId) {
-      setShowSettings(true);
-      showToast("⚙️ Add your Facebook credentials first!", "err");
-      return;
-    }
-    const caption = selected?.id === post.id ? editCaption : post.generatedPost;
-    try {
-      const res = await fetch(`https://graph.facebook.com/${settings.fbPageId}/feed`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: caption, access_token: settings.fbToken }),
-      });
-      const data = await res.json();
-      if (data.id) {
-        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, status: "posted" } : p));
-        showToast("🚀 LIVE on Facebook!");
-        setLiveStats(s => ({ ...s, posted: s.posted + 1 }));
-      } else {
-        showToast(data.error?.message || "Facebook error — check credentials.", "err");
-      }
-    } catch {
-      showToast("Network error. Try again.", "err");
-    }
-  };
-
-  const handleRegenerate = async (post) => {
-    if (!settings.claudeKey) { showToast("Add Claude API key in settings!", "err"); return; }
-    setIsGenerating(true);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": settings.claudeKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 500,
-          system: TONE_PROMPT,
-          messages: [{ role: "user", content: `Write a Facebook post for Malta Pulse about this news. Write from scratch, do not copy source text. Category: ${post.category}\n\nHeadline: ${post.rawTitle}\nSummary: ${post.rawSummary}\n\nReturn only the Facebook post text.` }]
-        })
-      });
-      const data = await res.json();
-      const newCaption = data.content?.[0]?.text || editCaption;
-      setEditCaption(newCaption);
-      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, generatedPost: newCaption } : p));
-      showToast("✨ New caption generated!");
-    } catch { showToast("AI generation failed.", "err"); }
-    setIsGenerating(false);
-  };
-
-  const toggleAgent = (id) => {
-    setAgents(prev => prev.map(a => a.id === id ? { ...a, status: a.status === "running" ? "paused" : "running" } : a));
-  };
-
-  const filtered = posts.filter(p => activeCategory === "All" || p.category === activeCategory);
-
-  return (
-    <div style={{ fontFamily: "system-ui, sans-serif", minHeight: "100vh", background: "#0d1117", color: "#fff" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap');
-        @keyframes pulse { 0%,100%{box-shadow:0 0 0 3px rgba(74,222,128,0.3)} 50%{box-shadow:0 0 0 6px rgba(74,222,128,0.1)} }
-        @keyframes shake { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-10deg)} 75%{transform:rotate(10deg)} }
-        @keyframes slideDown { from{transform:translateY(-100%);opacity:0} to{transform:translateY(0);opacity:1} }
-        @keyframes fadeUp { from{transform:translateY(10px);opacity:0} to{transform:translateY(0);opacity:1} }
-        @keyframes spin { to{transform:rotate(360deg)} }
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #0d1117; } ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 2px; }
-        textarea:focus,input:focus { outline: none; }
-        button:hover { filter: brightness(1.12); }
-      `}</style>
-
-      {/* TOAST */}
-      {toast && (
-        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, background: toast.type === "err" ? "#e63946" : "#4ade80", color: toast.type === "err" ? "#fff" : "#000", padding: "12px 20px", borderRadius: 10, fontWeight: 700, fontSize: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.4)", animation: "fadeUp 0.3s ease", maxWidth: 300 }}>
-          {toast.msg}
-        </div>
-      )}
-
-      {/* BREAKING ALERT BANNER */}
-      {breakingAlert && breakingAlert.status === "pending" && (
-        <BreakingBanner post={breakingAlert} onApprove={() => handleApprove(breakingAlert.id)} onDismiss={() => setBreakingAlert(null)} />
-      )}
-
-      {/* HEADER */}
-      <div style={{ background: "#151b27", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 40, height: 40, background: "linear-gradient(135deg, #e63946, #457b9d)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🇲🇹</div>
-          <div>
-            <div style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 22, letterSpacing: 1 }}>MALTA PULSE</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: 2, textTransform: "uppercase" }}>24/7 Automated Content System</div>
-          </div>
-        </div>
-
-        {/* Live stat pills */}
-        <div style={{ display: "flex", gap: 10 }}>
-          {[
-            { label: "Scraped Today", val: liveStats.scraped, color: "#457b9d" },
-            { label: "Generated", val: liveStats.generated, color: "#a78bfa" },
-            { label: "Posted", val: liveStats.posted, color: "#1877F2" },
-            { label: "Pending", val: liveStats.pending ?? posts.filter(p => p.status === "pending").length, color: "#fbbf24" },
-          ].map(s => (
-            <div key={s.label} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "6px 14px", textAlign: "center" }}>
-              <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 18, fontWeight: 700, color: s.color }}>{s.val}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        <button onClick={() => setShowSettings(!showSettings)} style={{ background: showSettings ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "9px 18px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-          ⚙️ Settings
-        </button>
-      </div>
-
-      {/* SETTINGS PANEL */}
-      {showSettings && (
-        <div style={{ background: "#151b27", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "20px 24px", display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
-          {[
-            { key: "fbPageId", label: "Facebook Page ID", ph: "123456789", w: 180 },
-            { key: "fbToken", label: "FB Page Access Token", ph: "EAAxx...", w: 280, pw: true },
-            { key: "whatsapp", label: "WhatsApp Number (Twilio)", ph: "+356xxxxxxxx", w: 200 },
-            { key: "email", label: "Alert Email", ph: "you@email.com", w: 200 },
-            { key: "claudeKey", label: "Claude API Key", ph: "sk-ant-...", w: 220, pw: true },
-          ].map(f => (
-            <div key={f.key}>
-              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>{f.label}</label>
-              <input type={f.pw ? "password" : "text"} value={settings[f.key]} onChange={e => setSettings(s => ({ ...s, [f.key]: e.target.value }))} placeholder={f.ph}
-                style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", padding: "9px 12px", borderRadius: 8, fontSize: 13, width: f.w }} />
-            </div>
-          ))}
-          <button onClick={() => { setShowSettings(false); showToast("✅ Settings saved permanently!"); }} style={{ background: "#e63946", color: "#fff", border: "none", padding: "10px 22px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Save All</button>
-        </div>
-      )}
-
-      {/* NAV TABS */}
-      <div style={{ background: "#151b27", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "0 24px", display: "flex", gap: 0 }}>
-        {[
-          { id: "queue", label: "📥 Post Queue", count: posts.filter(p => p.status === "pending").length },
-          { id: "agents", label: "🤖 Agents", count: agents.filter(a => a.status === "running").length },
-          { id: "posted", label: "📘 Posted", count: posts.filter(p => p.status === "posted").length },
-        ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ background: "none", border: "none", borderBottom: activeTab === tab.id ? "2px solid #e63946" : "2px solid transparent", color: activeTab === tab.id ? "#fff" : "rgba(255,255,255,0.4)", padding: "14px 20px", fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all 0.2s" }}>
-            {tab.label}
-            {tab.count > 0 && <span style={{ background: tab.id === "queue" ? "#e63946" : "#2d3748", color: "#fff", borderRadius: 20, padding: "1px 7px", fontSize: 11, fontWeight: 800 }}>{tab.count}</span>}
-          </button>
-        ))}
-      </div>
-
-      {/* MAIN BODY */}
-      <div style={{ display: "flex", height: "calc(100vh - 180px)" }}>
-
-        {/* ── QUEUE TAB ── */}
-        {activeTab === "queue" && (
-          <>
-            {/* Post Grid */}
-            <div style={{ width: selected ? "40%" : "100%", overflowY: "auto", padding: 20, transition: "width 0.3s" }}>
-              {/* Category filters */}
-              <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-                {CATEGORIES.map(cat => (
-                  <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding: "5px 14px", borderRadius: 20, border: "1px solid", borderColor: activeCategory === cat ? "#e63946" : "rgba(255,255,255,0.1)", background: activeCategory === cat ? "#e63946" : "transparent", color: activeCategory === cat ? "#fff" : "rgba(255,255,255,0.5)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                    {cat}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr" : "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
-                {filtered.map(post => (
-                  <PostCard key={post.id} post={post} onSelect={handleSelect} selected={selected?.id === post.id} />
-                ))}
-              </div>
-            </div>
-
-            {/* Editor Panel */}
-            {selected && (
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", borderLeft: "1px solid rgba(255,255,255,0.07)", overflowY: "auto", background: "#0d1117" }}>
-                <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 2 }}>Edit Post</span>
-                    <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 16, marginTop: 2 }}>{selected.rawTitle}</div>
+      <div className="agent-grid" style={{display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))', gap:14}}>
+        {AGENT_DEFS.map(def => {
+          const agent = agents?.find(a => a.key === def.key || (a.name||'').toLowerCase().includes(def.key)) || {};
+          const status = agent.status || 'unknown';
+          const dotColor = { running:'#4dbb87', idle:'#60aaff', error:'#ff6b6b' }[status] || '#333';
+          return (
+            <div key={def.key} style={S.card}>
+              <div style={{padding:'18px 18px 16px'}}>
+                <div style={{display:'flex', alignItems:'flex-start', gap:12, marginBottom:14}}>
+                  <span style={{fontSize:28, lineHeight:1}}>{def.icon}</span>
+                  <div style={{flex:1}}>
+                    <div style={{color:'#fff', fontWeight:700, fontSize:15}}>{def.name}</div>
+                    <div style={{color:'#444', fontSize:12, marginTop:2}}>{def.desc}</div>
                   </div>
-                  <button onClick={() => setSelected(null)} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "rgba(255,255,255,0.5)", width: 30, height: 30, borderRadius: "50%", cursor: "pointer", fontSize: 16 }}>✕</button>
+                  <div style={{width:10, height:10, borderRadius:'50%', background:dotColor, flexShrink:0, marginTop:5}} className={status==='running'?'status-dot-running':''} />
                 </div>
-
-                <img src={selected.image || selected.imageUrl || CAT_IMAGES[selected.category] || CAT_IMAGES["News"]} alt="" style={{ width: "100%", height: 180, objectFit: "cover" }} />
-
-                {/* FB Preview */}
-                <div style={{ margin: "16px 20px 0", background: "#1a1f2e", borderRadius: 10, padding: 16 }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #e63946, #457b9d)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🇲🇹</div>
+                <div style={{display:'flex', gap:20, fontSize:12}}>
+                  <div>
+                    <div style={{color:'#444', marginBottom:3}}>Status</div>
+                    <div style={{color:dotColor, fontWeight:600, textTransform:'capitalize'}}>{status}</div>
+                  </div>
+                  {agent.lastRun && (
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>Malta Pulse</div>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Just now · 🌍</div>
+                      <div style={{color:'#444', marginBottom:3}}>Last run</div>
+                      <div style={{color:'#bbb', fontWeight:600}}>{timeAgo(agent.lastRun)}</div>
                     </div>
+                  )}
+                  {agent.postsToday !== undefined && (
+                    <div>
+                      <div style={{color:'#444', marginBottom:3}}>Today</div>
+                      <div style={{color:'#bbb', fontWeight:600}}>{agent.postsToday} posts</div>
+                    </div>
+                  )}
+                </div>
+                {agent.lastError && (
+                  <div style={{marginTop:12, padding:'8px 12px', borderRadius:7, background:'rgba(255,107,107,0.08)', border:'1px solid rgba(255,107,107,0.15)', color:'#ff6b6b', fontSize:12}}>
+                    ⚠ {agent.lastError}
                   </div>
-                  <div style={{ fontSize: 13, lineHeight: 1.65, whiteSpace: "pre-wrap", color: "rgba(255,255,255,0.85)" }}>{editCaption}</div>
-                </div>
-
-                {/* Caption editor */}
-                <div style={{ padding: "16px 20px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1.5 }}>Caption</label>
-                    <button onClick={() => handleRegenerate(selected)} disabled={isGenerating} style={{ background: "rgba(167,139,250,0.15)", border: "1px solid rgba(167,139,250,0.3)", color: "#a78bfa", padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                      {isGenerating ? <span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</span> : "✨ Regenerate"}
-                    </button>
-                  </div>
-                  <textarea value={editCaption} onChange={e => setEditCaption(e.target.value)}
-                    style={{ width: "100%", height: 180, background: "#151b27", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: 12, borderRadius: 10, fontSize: 13, lineHeight: 1.6, resize: "vertical" }} />
-                </div>
-
-                {/* Action buttons */}
-                <div style={{ padding: "0 20px 20px", display: "flex", gap: 10 }}>
-                  <button onClick={() => handleApprove(selected.id)} style={{ flex: 1, background: "#4ade80", color: "#000", border: "none", padding: 13, borderRadius: 10, fontWeight: 800, cursor: "pointer", fontSize: 14 }}>
-                    ✅ Approve
-                  </button>
-                  <button onClick={() => { handleApprove(selected.id); setTimeout(() => handlePost(selected), 300); }} style={{ flex: 1, background: "#1877F2", color: "#fff", border: "none", padding: 13, borderRadius: 10, fontWeight: 800, cursor: "pointer", fontSize: 14 }}>
-                    📘 Approve & Post
-                  </button>
-                  <button onClick={() => handleReject(selected.id)} style={{ background: "rgba(230,57,70,0.15)", color: "#e63946", border: "1px solid rgba(230,57,70,0.3)", padding: "13px 16px", borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 16 }}>
-                    ✕
-                  </button>
-                </div>
+                )}
               </div>
-            )}
-          </>
-        )}
-
-        {/* ── AGENTS TAB ── */}
-        {activeTab === "agents" && (
-          <div style={{ width: "100%", overflowY: "auto", padding: 24 }}>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 20, marginBottom: 4 }}>🤖 Agent Control Room</div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>All agents run 24/7 in the background. Pause individual agents if needed.</div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14, marginBottom: 28 }}>
-              {agents.map(agent => <AgentCard key={agent.id} agent={agent} onToggle={toggleAgent} />)}
-            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-            {/* Source list */}
-            <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 18, marginBottom: 14 }}>📡 Monitored Sources</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
-              {SOURCES.map(src => (
-                <div key={src.id} style={{ background: "#151b27", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 22 }}>{src.icon}</span>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{src.name}</div>
-                    <span style={{ background: src.color + "33", color: src.color, padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700 }}>{src.category}</span>
-                  </div>
-                  <AgentPulse status="running" />
-                </div>
+// ─── Settings Tab ─────────────────────────────────────────────────────────────
+function ResultBanner({ s }) {
+  if (!s) return null;
+  return (
+    <div style={{marginTop:12, padding:'10px 14px', borderRadius:8, fontSize:13, fontWeight:500,
+      background: s.ok ? 'rgba(77,187,135,0.08)' : 'rgba(255,107,107,0.08)',
+      border:`1px solid ${s.ok ? 'rgba(77,187,135,0.2)' : 'rgba(255,107,107,0.2)'}`,
+      color: s.ok ? '#4dbb87' : '#ff6b6b',
+    }}>
+      {s.ok ? '✓ ' : '✗ '}{s.msg}
+      {s.expired && <div style={{marginTop:6}}><a href="https://business.facebook.com/settings" target="_blank" rel="noopener noreferrer">→ Renew at Meta Business Suite</a></div>}
+    </div>
+  );
+}
+
+function SettingsTab() {
+  const [fbToken, setFbToken] = useState(() => localStorage.getItem('mp_fb_token') || '');
+  const [fbStatus, setFbStatus] = useState(null);
+  const [fbBusy, setFbBusy] = useState(false);
+  const [tgToken, setTgToken] = useState(() => localStorage.getItem('mp_tg_token') || '');
+  const [tgChat, setTgChat]   = useState(() => localStorage.getItem('mp_tg_chat') || '');
+  const [tgStatus, setTgStatus] = useState(null);
+  const [tgBusy, setTgBusy] = useState(false);
+
+  function saveFb() {
+    localStorage.setItem('mp_fb_token', fbToken);
+    setFbStatus({ ok:true, msg:'Token saved.' });
+    setTimeout(() => setFbStatus(null), 2500);
+  }
+  async function testFb() {
+    setFbBusy(true); setFbStatus(null);
+    try {
+      const r = await fetch(`https://graph.facebook.com/me?access_token=${fbToken}`);
+      const d = await r.json();
+      if (d.error) setFbStatus({ ok:false, msg:d.error.message, expired: d.error.code === 190 });
+      else setFbStatus({ ok:true, msg:`Connected as: ${d.name} (${d.id})` });
+    } catch(e) { setFbStatus({ ok:false, msg:'Network error: ' + e.message }); }
+    setFbBusy(false);
+  }
+  function saveTg() {
+    localStorage.setItem('mp_tg_token', tgToken);
+    localStorage.setItem('mp_tg_chat', tgChat);
+    setTgStatus({ ok:true, msg:'Saved!' });
+    setTimeout(() => setTgStatus(null), 2500);
+  }
+  async function testTg() {
+    setTgBusy(true); setTgStatus(null);
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ chat_id:tgChat, text:'✅ Malta Pulse — test message from dashboard' }),
+      });
+      const d = await r.json();
+      setTgStatus(d.ok ? { ok:true, msg:'Test message sent!' } : { ok:false, msg:d.description||'Failed' });
+    } catch(e) { setTgStatus({ ok:false, msg:'Network error: ' + e.message }); }
+    setTgBusy(false);
+  }
+
+  return (
+    <div style={{maxWidth:600}}>
+      {/* Facebook */}
+      <div style={S.settCard}>
+        <div style={{display:'flex', alignItems:'center', gap:12, marginBottom:18}}>
+          <div style={{width:40,height:40,background:'#1877F2',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>📘</div>
+          <div>
+            <div style={{color:'#fff',fontWeight:700,fontSize:15}}>Facebook Integration</div>
+            <div style={{color:'#555',fontSize:12}}>Auto-post approved articles to your Facebook page</div>
+          </div>
+        </div>
+        <label style={S.label}>Page Access Token</label>
+        <input className="mp-input" type="password" style={S.input} placeholder="EAAxxxxxxx…" value={fbToken} onChange={e => setFbToken(e.target.value)} />
+        <div style={{fontSize:12,color:'#444',marginTop:6,marginBottom:14}}>
+          Get yours from <a href="https://business.facebook.com/settings" target="_blank" rel="noopener noreferrer">Meta Business Suite → Settings → Page Access Tokens</a>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button style={S.btnRed} onClick={saveFb} disabled={!fbToken}>Save Token</button>
+          <button style={S.btnGhost} onClick={testFb} disabled={!fbToken||fbBusy}>{fbBusy?'Testing…':'Test Connection'}</button>
+        </div>
+        <ResultBanner s={fbStatus} />
+      </div>
+
+      {/* Telegram */}
+      <div style={S.settCard}>
+        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:18}}>
+          <div style={{width:40,height:40,background:'#229ED9',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>✈️</div>
+          <div>
+            <div style={{color:'#fff',fontWeight:700,fontSize:15}}>Telegram Alerts</div>
+            <div style={{color:'#555',fontSize:12}}>Alerts for new posts, agent errors and system events</div>
+          </div>
+        </div>
+        <label style={S.label}>Bot Token</label>
+        <input className="mp-input" type="password" style={{...S.input,marginBottom:12}} placeholder="123456:ABC-DEF…" value={tgToken} onChange={e => setTgToken(e.target.value)} />
+        <label style={S.label}>Chat ID</label>
+        <input className="mp-input" style={S.input} placeholder="-100123456789" value={tgChat} onChange={e => setTgChat(e.target.value)} />
+        <div style={{fontSize:12,color:'#444',marginTop:6,marginBottom:14}}>
+          Create bot with <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> · Get chat ID from <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button style={S.btnRed} onClick={saveTg} disabled={!tgToken||!tgChat}>Save</button>
+          <button style={S.btnGhost} onClick={testTg} disabled={!tgToken||!tgChat||tgBusy}>{tgBusy?'Sending…':'Send Test Message'}</button>
+        </div>
+        <ResultBanner s={tgStatus} />
+      </div>
+
+      {/* Server info */}
+      <div style={S.settCard}>
+        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}>
+          <div style={{width:40,height:40,background:'#222',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>🖥️</div>
+          <div>
+            <div style={{color:'#fff',fontWeight:700,fontSize:15}}>Server Info</div>
+            <div style={{color:'#555',fontSize:12}}>Read-only reference</div>
+          </div>
+        </div>
+        {[
+          {label:'API URL',     val:API_URL},
+          {label:'Server IP',   val:'77.42.91.193'},
+          {label:'SSH',         val:'root@77.42.91.193'},
+          {label:'Server path', val:'/home/malta-pulse/'},
+        ].map(row => (
+          <div key={row.label} style={{display:'flex',gap:16,padding:'8px 0',borderBottom:'1px solid #1a1a1a',fontSize:13}}>
+            <span style={{color:'#444',width:96,flexShrink:0}}>{row.label}</span>
+            <span style={{color:'#999',fontFamily:'monospace',wordBreak:'break-all'}}>{row.val}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const [tab, setTab] = useState('queue');
+  const [posts, setPosts] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [agents, setAgents] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [loadingAgents, setLoadingAgents] = useState(false);
+  const [filter, setFilter] = useState('pending');
+  const [editPost, setEditPost] = useState(null);
+  const [imagePost, setImagePost] = useState(null);
+  const [pickedImgs, setPickedImgs] = useState({});
+  const [editedTexts, setEditedTexts] = useState({});
+  const [busyApprove, setBusyApprove] = useState({});
+  const [busyReject, setBusyReject] = useState({});
+  const [toast, setToast] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
+
+  function showToast(msg, ok = true) {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3200);
+  }
+
+  const fetchPosts = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_URL}/api/posts/all`);
+      if (!r.ok) throw new Error();
+      setPosts(await r.json());
+      setLastUpdate(new Date());
+    } catch {}
+    setLoadingPosts(false);
+  }, []);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_URL}/api/stats`);
+      if (r.ok) setStats(await r.json());
+    } catch {}
+  }, []);
+
+  const fetchAgents = useCallback(async () => {
+    setLoadingAgents(true);
+    try {
+      const r = await fetch(`${API_URL}/api/agents/status`);
+      if (r.ok) setAgents(await r.json());
+    } catch {}
+    setLoadingAgents(false);
+  }, []);
+
+  useEffect(() => {
+    fetchPosts(); fetchStats(); fetchAgents();
+    const iv = setInterval(() => { fetchPosts(); fetchStats(); }, 30000);
+    return () => clearInterval(iv);
+  }, [fetchPosts, fetchStats, fetchAgents]);
+
+  async function handleApprove(post) {
+    setBusyApprove(p => ({...p, [post.id]:true}));
+    const fbToken = localStorage.getItem('mp_fb_token');
+    try {
+      const body = {};
+      if (editedTexts[post.id] !== undefined) body.generatedPost = editedTexts[post.id];
+      if (pickedImgs[post.id]) body.imageUrl = pickedImgs[post.id];
+      if (fbToken) body.fbToken = fbToken;
+      const r = await fetch(`${API_URL}/api/posts/${post.id}/approve`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
+      });
+      if (r.ok) { showToast('✓ Post approved'); fetchPosts(); fetchStats(); }
+      else showToast('Failed to approve', false);
+    } catch { showToast('Network error', false); }
+    setBusyApprove(p => ({...p, [post.id]:false}));
+  }
+
+  async function handleReject(post) {
+    setBusyReject(p => ({...p, [post.id]:true}));
+    try {
+      const r = await fetch(`${API_URL}/api/posts/${post.id}/reject`, { method:'POST' });
+      if (r.ok) { showToast('Post rejected'); fetchPosts(); fetchStats(); }
+      else showToast('Failed to reject', false);
+    } catch { showToast('Network error', false); }
+    setBusyReject(p => ({...p, [post.id]:false}));
+  }
+
+  const counts = {
+    all: posts.length,
+    pending:  posts.filter(p => postStatus(p) === 'pending').length,
+    approved: posts.filter(p => postStatus(p) === 'approved').length,
+    rejected: posts.filter(p => postStatus(p) === 'rejected').length,
+  };
+  const filtered = posts.filter(p => filter === 'all' || postStatus(p) === filter);
+
+  const STAT_ITEMS = [
+    { label:'Scraped',  val: stats?.totalScraped ?? stats?.total ?? '—',  color:'#60aaff' },
+    { label:'Pending',  val: stats?.pending ?? counts.pending,             color:'#f0a500' },
+    { label:'Approved', val: stats?.approved ?? counts.approved,           color:'#4dbb87' },
+    { label:'Posted',   val: stats?.posted ?? stats?.published ?? '—',     color:'#CE1126' },
+  ];
+
+  return (
+    <div style={{minHeight:'100vh', background:'#0d0d0d'}}>
+      {/* Header */}
+      <div style={{background:'#111', borderBottom:'2px solid #CE1126', position:'sticky', top:0, zIndex:200}}>
+        <div style={{maxWidth:1240, margin:'0 auto', padding:'0 20px', display:'flex', alignItems:'center', gap:16, height:58}}>
+          <div style={{display:'flex', alignItems:'center', gap:10, flexShrink:0}}>
+            <span style={{fontSize:22}}>🇲🇹</span>
+            <div>
+              <div style={{fontWeight:800, fontSize:16, color:'#fff', letterSpacing:0.5, lineHeight:1}}>
+                MALTA<span style={{color:'#CE1126'}}>PULSE</span>
+              </div>
+              <div style={{fontSize:9, color:'#444', letterSpacing:2, lineHeight:1, marginTop:2}}>DASHBOARD</div>
+            </div>
+          </div>
+          <div style={{flex:1}} />
+          <div className="stats-row" style={{display:'flex', gap:22}}>
+            {STAT_ITEMS.map(s => (
+              <div key={s.label} style={{textAlign:'center'}}>
+                <div style={{fontWeight:800, fontSize:18, color:s.color, lineHeight:1}}>{s.val}</div>
+                <div style={{fontSize:9, color:'#444', lineHeight:1, marginTop:2, letterSpacing:0.8}}>{s.label.toUpperCase()}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:'flex', alignItems:'center', gap:6, background:'#CE1126', borderRadius:20, padding:'5px 12px', fontSize:11, fontWeight:800, letterSpacing:1, flexShrink:0}}>
+            <div style={{width:6, height:6, background:'#fff', borderRadius:'50%', animation:'blink 1s infinite'}} />
+            LIVE
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{background:'#111', borderBottom:'1px solid #1a1a1a'}}>
+        <div style={{maxWidth:1240, margin:'0 auto', padding:'0 16px', display:'flex', gap:2, overflowX:'auto'}}>
+          {[
+            { key:'queue',    label:'Post Queue', icon:'📋', badge: counts.pending || null },
+            { key:'agents',   label:'Agents',     icon:'🤖' },
+            { key:'settings', label:'Settings',   icon:'⚙️' },
+          ].map(t => (
+            <button key={t.key} className="tab-btn" onClick={() => setTab(t.key)} style={{
+              color: tab === t.key ? '#fff' : '#555',
+              borderBottom:`2px solid ${tab === t.key ? '#CE1126' : 'transparent'}`,
+            }}>
+              {t.icon} {t.label}
+              {t.badge > 0 && (
+                <span style={{background:'#CE1126', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:11, fontWeight:700}}>
+                  {t.badge}
+                </span>
+              )}
+            </button>
+          ))}
+          {lastUpdate && (
+            <span style={{color:'#333', fontSize:11, marginLeft:'auto', alignSelf:'center', paddingRight:4}}>
+              Updated {timeAgo(lastUpdate)}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{maxWidth:1240, margin:'0 auto', padding:'24px 20px'}}>
+
+        {tab === 'queue' && (
+          <div>
+            <div style={{display:'flex', gap:8, marginBottom:20, flexWrap:'wrap', alignItems:'center'}}>
+              {['pending','approved','rejected','all'].map(f => (
+                <button key={f} className="filter-pill" onClick={() => setFilter(f)} style={{
+                  background: filter === f ? '#CE1126' : '#161616',
+                  color:       filter === f ? '#fff'    : '#666',
+                  borderColor: filter === f ? '#CE1126' : '#222',
+                }}>
+                  {f.charAt(0).toUpperCase()+f.slice(1)}&nbsp;
+                  <span style={{opacity:0.65}}>({counts[f] ?? 0})</span>
+                </button>
               ))}
+              <button style={{...S.btnGhost, marginLeft:'auto'}} onClick={fetchPosts}>↺ Refresh</button>
             </div>
 
-            {/* Schedule info */}
-            <div style={{ marginTop: 24, background: "#151b27", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 20 }}>
-              <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 16, marginBottom: 12 }}>📅 Posting Schedule</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                {[
-                  { label: "Routine Posts", val: "Every 2 hours", icon: "🕐" },
-                  { label: "Weather Updates", val: "6am, 12pm, 6pm", icon: "🌤️" },
-                  { label: "Traffic Updates", val: "7am, 8am, 5pm, 6pm", icon: "🚗" },
-                  { label: "Breaking News", val: "Instant — alert sent", icon: "🚨" },
-                  { label: "Sports Results", val: "After final whistle", icon: "⚽" },
-                  { label: "Lifestyle/Events", val: "Morning & Evening", icon: "❤️" },
-                ].map(s => (
-                  <div key={s.label} style={{ background: "#0d1117", borderRadius: 8, padding: "12px 14px" }}>
-                    <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>{s.label}</div>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{s.val}</div>
+            {loadingPosts ? (
+              <div style={{textAlign:'center', padding:80, color:'#333'}}>
+                <div style={{fontSize:36, marginBottom:12}}>⟳</div>
+                <div>Loading posts…</div>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div style={{textAlign:'center', padding:80}}>
+                <div style={{fontSize:40, marginBottom:12}}>📭</div>
+                <div style={{color:'#444', fontSize:15}}>No {filter} posts</div>
+                {filter === 'pending' && (
+                  <div style={{color:'#333', fontSize:13, marginTop:6}}>
+                    New posts appear here automatically every 30 seconds
                   </div>
+                )}
+              </div>
+            ) : (
+              <div className="post-grid" style={{display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:14}}>
+                {filtered.map(post => (
+                  <PostCard
+                    key={post.id}
+                    post={editedTexts[post.id] !== undefined ? {...post, generatedPost:editedTexts[post.id]} : post}
+                    pickedImg={pickedImgs[post.id]}
+                    onApprove={() => handleApprove(post)}
+                    onReject={() => handleReject(post)}
+                    onEdit={() => setEditPost(post)}
+                    onPickImage={() => setImagePost(post)}
+                    approving={!!busyApprove[post.id]}
+                    rejecting={!!busyReject[post.id]}
+                  />
                 ))}
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── POSTED TAB ── */}
-        {activeTab === "posted" && (
-          <div style={{ width: "100%", overflowY: "auto", padding: 24 }}>
-            <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 20, marginBottom: 16 }}>📘 Posted to Facebook</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-              {posts.filter(p => p.status === "posted").map(post => (
-                <PostCard key={post.id} post={post} onSelect={handleSelect} selected={false} />
-              ))}
-            </div>
-            {posts.filter(p => p.status === "posted").length === 0 && (
-              <div style={{ textAlign: "center", color: "rgba(255,255,255,0.3)", marginTop: 60, fontSize: 15 }}>No posts published yet — approve & post from the queue!</div>
             )}
           </div>
         )}
+
+        {tab === 'agents' && <AgentsTab agents={agents} loading={loadingAgents} onRefresh={fetchAgents} />}
+        {tab === 'settings' && <SettingsTab />}
       </div>
+
+      {editPost && (
+        <EditModal
+          post={editPost}
+          onSave={text => {
+            setEditedTexts(p => ({...p, [editPost.id]:text}));
+            showToast('✓ Edits saved — applied on approve');
+            setEditPost(null);
+          }}
+          onClose={() => setEditPost(null)}
+        />
+      )}
+
+      {imagePost && (
+        <ImagePickerModal
+          post={imagePost}
+          onPick={url => {
+            setPickedImgs(p => ({...p, [imagePost.id]:url}));
+            showToast('✓ Image selected');
+            setImagePost(null);
+          }}
+          onClose={() => setImagePost(null)}
+        />
+      )}
+
+      {toast && (
+        <div className="mp-toast" style={{
+          background: toast.ok ? 'rgba(77,187,135,0.12)' : 'rgba(255,107,107,0.12)',
+          color:       toast.ok ? '#4dbb87' : '#ff6b6b',
+          border:`1px solid ${toast.ok ? 'rgba(77,187,135,0.25)' : 'rgba(255,107,107,0.25)'}`,
+        }}>{toast.msg}</div>
+      )}
     </div>
   );
 }

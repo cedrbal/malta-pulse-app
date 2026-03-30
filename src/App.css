@@ -1,38 +1,58 @@
-.App {
-  text-align: center;
-}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0d0d0d;color:#fff;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow-x:hidden;}
+input,textarea,select{font-family:inherit;color:#fff!important;}
+input::placeholder,textarea::placeholder{color:#555;}
+a{color:#60aaff;text-decoration:none;}
+a:hover{text-decoration:underline;}
+button:disabled{opacity:0.5;cursor:not-allowed!important;}
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:#111;}
+::-webkit-scrollbar-thumb{background:#333;border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:#444;}
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
-}
+/* Card image hover */
+.card-img-wrap{position:relative;height:180px;background:#111;cursor:pointer;overflow:hidden;flex-shrink:0;}
+.card-img-wrap img{width:100%;height:100%;object-fit:cover;display:block;transition:transform 0.3s;}
+.card-img-wrap:hover img{transform:scale(1.04);}
+.card-img-overlay{position:absolute;inset:0;background:rgba(0,0,0,0);color:transparent;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;transition:all 0.2s;letter-spacing:0.5px;}
+.card-img-wrap:hover .card-img-overlay{background:rgba(0,0,0,0.55);color:#fff;}
 
-.App-link {
-  color: #61dafb;
-}
+/* Image picker grid */
+.img-opt{height:80px;border-radius:8px;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:border-color 0.15s;}
+.img-opt:hover{border-color:#CE1126;}
+.img-opt img{width:100%;height:100%;object-fit:cover;display:block;}
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* Agent card status dot pulse */
+.status-dot-running{animation:pulse-green 2s infinite;}
+@keyframes pulse-green{0%,100%{box-shadow:0 0 0 0 rgba(77,187,135,0.4)}50%{box-shadow:0 0 0 6px rgba(77,187,135,0)}}
+
+/* Tabs */
+.tab-btn{background:none;border:none;cursor:pointer;padding:14px 18px;font-size:13px;font-weight:600;display:flex;gap:6px;align-items:center;transition:color 0.15s;white-space:nowrap;}
+.tab-btn:hover{color:#ccc!important;}
+
+/* Filter pills */
+.filter-pill{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;border:1px solid #2a2a2a;text-transform:capitalize;}
+.filter-pill:hover{border-color:#555;}
+
+/* Approve/reject hover */
+.btn-approve:hover:not(:disabled){background:#1f4a33!important;border-color:#3a7a55!important;}
+.btn-reject:hover:not(:disabled){background:#4a1f1f!important;border-color:#7a3a3a!important;}
+
+/* Setting card input focus */
+.mp-input:focus{border-color:#555!important;outline:none;}
+
+/* Toast */
+.mp-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:12px 22px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.5);animation:slideUp 0.25s ease;white-space:nowrap;}
+
+/* Mobile responsive */
+@media(max-width:640px){
+  .stats-row{display:none!important;}
+  .post-grid{grid-template-columns:1fr!important;}
+  .agent-grid{grid-template-columns:1fr!important;}
 }
