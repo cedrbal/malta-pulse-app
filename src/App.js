@@ -63,6 +63,7 @@ const S = {
 function ImagePickerModal({ post, onPick, onClose }) {
   const [custom, setCustom] = useState('');
   const imgs = catImgs(post.category || 'News');
+  const scraped = post.imageUrl;
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={e => e.stopPropagation()}>
@@ -74,6 +75,15 @@ function ImagePickerModal({ post, onPick, onClose }) {
           <p style={{color:'#777', fontSize:13, marginBottom:14}}>
             Category: <strong style={{color:'#bbb'}}>{post.category || 'News'}</strong> — click a photo or paste a custom URL
           </p>
+          {scraped && (
+            <div style={{marginBottom:14}}>
+              <div style={{color:'#555', fontSize:11, fontWeight:600, letterSpacing:0.5, textTransform:'uppercase', marginBottom:6}}>Scraped from article</div>
+              <div className="img-opt" style={{height:100, width:'100%', border:'2px solid #CE1126'}} onClick={() => onPick(scraped)}>
+                <img src={scraped} alt="" />
+              </div>
+            </div>
+          )}
+          <div style={{color:'#555', fontSize:11, fontWeight:600, letterSpacing:0.5, textTransform:'uppercase', marginBottom:6}}>Curated photos</div>
           <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:16}}>
             {imgs.map((url, i) => (
               <div key={i} className="img-opt" onClick={() => onPick(url)}>
@@ -179,14 +189,20 @@ function PostCard({ post, pickedImg, onApprove, onReject, onEdit, onPickImage, a
           <button style={S.btnSmGhost} onClick={onEdit}>✏️ Edit</button>
           <button style={S.btnSmGhost} onClick={onPickImage}>🖼 Image</button>
           <div style={{flex:1}} />
-          {status !== 'approved' && (
-            <button className="btn-approve" style={{...S.btnSm, background:'rgba(77,187,135,0.1)', color:'#4dbb87', border:'1px solid rgba(77,187,135,0.2)'}} onClick={onApprove} disabled={approving}>
-              {approving ? '…' : '✓ Approve'}
+          {status !== 'approved' && (<>
+            <button className="btn-approve" style={{...S.btnSm, background:'rgba(24,119,242,0.12)', color:'#60aaff', border:'1px solid rgba(24,119,242,0.25)'}} onClick={() => onApprove('facebook')} disabled={!!approving}>
+              {approving === 'facebook' ? '…' : '📘'}
             </button>
-          )}
+            <button className="btn-approve" style={{...S.btnSm, background:'rgba(77,187,135,0.1)', color:'#4dbb87', border:'1px solid rgba(77,187,135,0.2)'}} onClick={() => onApprove('site')} disabled={!!approving}>
+              {approving === 'site' ? '…' : '🌐'}
+            </button>
+            <button className="btn-approve" style={{...S.btnSm, background:'rgba(206,17,38,0.12)', color:'#CE1126', border:'1px solid rgba(206,17,38,0.25)'}} onClick={() => onApprove('both')} disabled={!!approving}>
+              {approving === 'both' ? '…' : '🚀'}
+            </button>
+          </>)}
           {status !== 'rejected' && (
             <button className="btn-reject" style={{...S.btnSm, background:'rgba(255,107,107,0.1)', color:'#ff6b6b', border:'1px solid rgba(255,107,107,0.2)'}} onClick={onReject} disabled={rejecting}>
-              {rejecting ? '…' : '✕ Reject'}
+              {rejecting ? '…' : '✕'}
             </button>
           )}
         </div>
@@ -438,21 +454,22 @@ export default function App() {
     return () => clearInterval(iv);
   }, [fetchPosts, fetchStats, fetchAgents]);
 
-  async function handleApprove(post) {
-    setBusyApprove(p => ({...p, [post.id]:true}));
+  async function handleApprove(post, publishTarget) {
+    setBusyApprove(p => ({...p, [post.id]: publishTarget}));
     const fbToken = localStorage.getItem('mp_fb_token');
     try {
-      const body = {};
+      const body = { publishTarget };
       if (editedTexts[post.id] !== undefined) body.generatedPost = editedTexts[post.id];
       if (pickedImgs[post.id]) body.imageUrl = pickedImgs[post.id];
       if (fbToken) body.fbToken = fbToken;
       const r = await fetch(`${API_URL}/api/posts/${post.id}/approve`, {
         method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
       });
-      if (r.ok) { showToast('✓ Post approved'); fetchPosts(); fetchStats(); }
-      else showToast('Failed to approve', false);
+      const label = publishTarget === 'facebook' ? '📘 Posted to Facebook' : publishTarget === 'site' ? '🌐 Published to website' : '🚀 Posted to both';
+      if (r.ok) { showToast(label); fetchPosts(); fetchStats(); }
+      else showToast('Failed to publish', false);
     } catch { showToast('Network error', false); }
-    setBusyApprove(p => ({...p, [post.id]:false}));
+    setBusyApprove(p => ({...p, [post.id]: null}));
   }
 
   async function handleReject(post) {
@@ -579,11 +596,11 @@ export default function App() {
                     key={post.id}
                     post={editedTexts[post.id] !== undefined ? {...post, generatedPost:editedTexts[post.id]} : post}
                     pickedImg={pickedImgs[post.id]}
-                    onApprove={() => handleApprove(post)}
+                    onApprove={(target) => handleApprove(post, target)}
                     onReject={() => handleReject(post)}
                     onEdit={() => setEditPost(post)}
                     onPickImage={() => setImagePost(post)}
-                    approving={!!busyApprove[post.id]}
+                    approving={busyApprove[post.id] || null}
                     rejecting={!!busyReject[post.id]}
                   />
                 ))}
