@@ -36,6 +36,11 @@ const AGENT_DEFS = [
 function uImg(id) { return `https://images.unsplash.com/${id}?w=600&q=80`; }
 function catImgs(cat) { return (CAT_IMGS[cat] || DEFAULT_IMGS).map(uImg); }
 function catColor(cat) { return CAT_COLOR[cat] || '#666'; }
+function proxyImg(url) {
+  if (!url) return '';
+  if (url.includes('unsplash.com')) return url; // Unsplash doesn't need proxying
+  return `${API_URL}/api/proxy-image?url=${encodeURIComponent(url)}`;
+}
 function timeAgo(ts) {
   if (!ts) return 'Just now';
   const d = Math.floor((Date.now() - new Date(ts)) / 1000);
@@ -144,7 +149,8 @@ function EditModal({ post, onSave, onClose }) {
 // ─── Post Card ────────────────────────────────────────────────────────────────
 function PostCard({ post, pickedImg, onApprove, onReject, onEdit, onPickImage, approving, rejecting }) {
   const [expanded, setExpanded] = useState(false);
-  const img = pickedImg || post.imageUrl || catImgs(post.category || 'News')[0];
+  const rawImg = pickedImg || post.imageUrl || '';
+  const img = rawImg ? proxyImg(rawImg) : catImgs(post.category || 'News')[0];
   const text = post.generatedPost || '';
   const color = catColor(post.category);
   const status = postStatus(post);
@@ -158,7 +164,7 @@ function PostCard({ post, pickedImg, onApprove, onReject, onEdit, onPickImage, a
   return (
     <div style={S.card}>
       <div className="card-img-wrap" onClick={onPickImage}>
-        <img src={img} alt="" onError={e => { e.target.src = catImgs(post.category || 'News')[1] || catImgs('News')[0]; }} />
+        <img src={img} alt="" onError={e => { e.target.onerror=null; e.target.src = catImgs(post.category || 'News')[0]; }} />
         <div className="card-img-overlay">📷 Change Image</div>
         {post.imageUrl && !pickedImg && <div style={{position:'absolute',top:6,left:6,background:'rgba(0,0,0,0.6)',color:'#4dbb87',fontSize:9,fontWeight:700,borderRadius:4,padding:'2px 6px',letterSpacing:0.5}}>SCRAPED</div>}
       </div>
